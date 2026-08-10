@@ -1,0 +1,148 @@
+#include <WiFi.h>
+#include <esp_now.h>
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+#define OLED_RESET -1
+#define OLED_ADDRESS 0x3C
+
+Adafruit_SSD1306 display(
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  &Wire,
+  OLED_RESET
+);
+
+// Data structure
+typedef struct struct_message {
+  float temperature;
+  float humidity;
+} struct_message;
+
+struct_message receivedData;
+
+// Receive callback
+void OnDataRecv(
+  const uint8_t *mac,
+  const uint8_t *incomingData,
+  int len
+) {
+
+  if (len == sizeof(receivedData)) {
+
+    memcpy(
+      &receivedData,
+      incomingData,
+      sizeof(receivedData)
+    );
+
+    Serial.println("Data received!");
+
+    Serial.print("Temperature: ");
+    Serial.print(receivedData.temperature);
+    Serial.println(" °C");
+
+    Serial.print("Humidity: ");
+    Serial.print(receivedData.humidity);
+    Serial.println(" %");
+
+    // Update OLED
+    display.clearDisplay();
+
+    display.setTextColor(SSD1306_WHITE);
+
+    // Title
+    display.setTextSize(1);
+    display.setCursor(25, 0);
+    display.println("DHT22 DATA");
+
+    display.drawLine(
+      0, 12,
+      127, 12,
+      SSD1306_WHITE
+    );
+
+    // Temperature
+    display.setTextSize(2);
+    display.setCursor(0, 20);
+    display.print("T:");
+    display.print(receivedData.temperature, 1);
+    display.println(" C");
+
+    // Humidity
+    display.setCursor(0, 45);
+    display.print("H:");
+    display.print(receivedData.humidity, 1);
+    display.println(" %");
+
+    display.display();
+  }
+}
+
+void setup() {
+
+  Serial.begin(115200);
+
+  // OLED
+  Wire.begin(21, 22);
+
+  if (!display.begin(
+        SSD1306_SWITCHCAPVCC,
+        OLED_ADDRESS
+      )) {
+
+    Serial.println("OLED initialization failed!");
+
+    while (1);
+  }
+
+  // Initial OLED screen
+  display.clearDisplay();
+
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(2);
+  display.setCursor(10, 5);
+  display.println("DHT22");
+
+  display.setTextSize(1);
+  display.setCursor(20, 35);
+  display.println("Waiting...");
+
+  display.display();
+
+  // WiFi Station mode
+  WiFi.mode(WIFI_STA);
+
+  // Print MAC address
+  Serial.println();
+  Serial.print("Receiver MAC Address: ");
+  Serial.println(WiFi.macAddress());
+
+  // Initialize ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+
+    Serial.println("ESP-NOW initialization failed!");
+
+    return;
+  }
+
+  // Register receive callback
+  esp_now_register_recv_cb(OnDataRecv);
+
+  Serial.println("Receiver ready!");
+}
+
+void loop() {
+
+  // Nothing required here.
+  // Data is handled automatically
+  // when it arrives.
+
+  delay(10);
+}
